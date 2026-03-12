@@ -1,0 +1,83 @@
+{{- if .Values.jobs }}
+{{- range .Values.jobs }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .name }}
+  labels:
+    "app.kubernetes.io/name": '{{ $.Release.Name }}'
+    "app.kubernetes.io/managed-by": "{{ $.Release.Service }}"
+    "app.kubernetes.io/instance": "{{ $.Release.Name }}"
+spec:
+  backoffLimit: {{ .backoffLimit | default 1 }}
+  activeDeadlineSeconds: {{ .activeDeadlineSeconds | default 100 }}
+  ttlSecondsAfterFinished: {{ .ttlSecondsAfterFinished | default 300 }}
+  template:
+    metadata:
+      annotations:
+        timestamp: "{{ date "20060102150405" now }}"
+    spec:
+      restartPolicy: {{ .restartPolicy | default "Never" }}
+    {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+    {{- end }}
+      containers:
+        - name: {{ .name }}
+          securityContext:
+            {{- if .securityContext }}
+            {{- toYaml .securityContext | nindent 12 }}
+            {{- else if $.Values.securityContext }}
+            {{- toYaml $.Values.securityContext | nindent 12 }}
+            {{- end }}
+          {{- $imageRepository := $.Values.image.repository }}
+          {{- $imageTag := $.Values.image.tag }}
+          {{- $imagePullPolicy := $.Values.image.pullPolicy }}
+          {{- if .image }}
+          image: "{{ .image.repository | default $imageRepository }}:{{ .image.tag | default $imageTag }}"
+          imagePullPolicy: {{ $imagePullPolicy }}
+          {{- else }}
+          image: "{{ $imageRepository }}:{{ $imageTag }}"
+          imagePullPolicy: {{ $imagePullPolicy }}
+          {{- end }}
+          {{- if .command }}
+          command:
+            {{- toYaml .command | nindent 12 }}
+          {{- end }}
+          {{- if .args }}
+          args:
+            {{- toYaml .args | nindent 12 }}
+          {{- end }}
+          env:
+          {{- with $.Values.env }}
+          {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .env }}
+          {{- toYaml . | nindent 12 }}
+          {{- end }}
+          resources:
+            {{- if .resources }}
+            {{- toYaml .resources | nindent 12 }}
+            {{- else if $.Values.resources }}
+            {{- toYaml $.Values.resources | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            {{- if $.Values.persistence.mounts }}
+            {{- range $.Values.persistence.mounts }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+              {{- if .readOnly }}
+              readOnly: {{ .readOnly }}
+              {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- if .volumeMounts }}
+            {{- toYaml .volumeMounts | nindent 12 }}
+            {{- end }}
+      volumes:
+        {{- if $.Values.persistence.volumes }}
+        {{ toYaml $.Values.persistence.volumes | nindent 8 }}
+        {{- end }}
+---
+{{- end }}
+{{- end }}
